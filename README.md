@@ -19,6 +19,10 @@ build an accurate profile of what you actually do.
 - **Human-like behavior** — curved cursor movement with mouse events, momentum
   scrolling (quick flicks vs. slow read-scrolls, occasional scroll-ups), reading
   pauses, and hover-before-click.
+- **Feed-aware on social sites** — on recognized social/feed sites (Reddit, X,
+  Facebook, Instagram, TikTok, YouTube, etc.) it lingers much longer and switches
+  to fast, continuous, variable-speed feed scrolling (cruise / flick / fling)
+  with the occasional pause to "watch" a post — the way people actually scroll a feed.
 - **Fully randomized timing** — the gap between actions is drawn from a
   Gaussian-ish distribution *and* differs by what just happened: a person reads
   longer after a click than after a quick cursor drift. Nothing is on a fixed

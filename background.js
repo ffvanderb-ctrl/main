@@ -35,11 +35,29 @@ function shuffleArray(arr) {
   return a;
 }
 
+// Social / feed-style sites where people tend to linger and scroll a lot.
+const SOCIAL_HOSTS = [
+  "reddit.com", "twitter.com", "x.com", "facebook.com", "instagram.com",
+  "tiktok.com", "youtube.com", "pinterest.com", "tumblr.com", "linkedin.com",
+  "mastodon.social", "threads.net", "snapchat.com", "twitch.tv", "quora.com",
+  "9gag.com", "vk.com", "weibo.com", "bsky.app"
+];
+
+function isSocial(url) {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+    return SOCIAL_HOSTS.some((h) => host === h || host.endsWith("." + h));
+  } catch {
+    return false;
+  }
+}
+
 // Vary the dwell time per site so visits don't all last the same — real
 // browsing is very uneven. Rather than a flat ±band, draw from a mixture:
 // most visits are "normal", some are quick glances, a few are long reads.
 // This gives a heavier-tailed, more human distribution of visit lengths.
-function nextDeadline(config) {
+// Social/feed sites get an extra multiplier — people doom-scroll for a while.
+function nextDeadline(config, url) {
   const r = Math.random();
   let factor;
   if (r < 0.2) {
@@ -49,6 +67,7 @@ function nextDeadline(config) {
   } else {
     factor = 1.5 + Math.random() * 1.3;     // long read: 150%–280%
   }
+  if (isSocial(url)) factor *= 1.8 + Math.random() * 1.7; // lingers 1.8x–3.5x longer
   const ms = config.dwellSeconds * 1000 * factor;
   // Keep it sane regardless of baseline.
   return Date.now() + Math.max(4000, ms);
@@ -96,7 +115,7 @@ async function start() {
   const order = buildOrder(config);
   if (order.length === 0) return { ok: false, error: "No valid sites configured." };
 
-  const deadline = nextDeadline(config);
+  const deadline = nextDeadline(config, order[0]);
   const tab = await chrome.tabs.create({ url: order[0], active: true });
   await setRuntime({
     running: true,
@@ -133,7 +152,7 @@ async function advanceSite() {
     }
   }
 
-  const deadline = nextDeadline(config);
+  const deadline = nextDeadline(config, order[next]);
   await setRuntime({ currentIndex: next, siteDeadline: deadline, order });
   await scheduleSafetyAlarm(deadline);
   try {
@@ -227,13 +246,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         }
         const config = await getConfig();
+        const url = (sender.tab && sender.tab.url) || rt.order[rt.currentIndex];
         sendResponse({
           run: true,
           index: rt.currentIndex,
           dwellMs: remaining,
           actionIntervalMs: Math.max(500, config.actionIntervalSeconds * 1000),
           scroll: config.scroll,
-          click: config.click
+          click: config.click,
+          social: isSocial(url)
         });
         break;
       }

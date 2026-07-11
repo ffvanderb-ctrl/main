@@ -134,6 +134,39 @@
     doChunk();
   }
 
+  // Feed-style scrolling for social sites: faster, longer, and more continuous
+  // than article reading — flicking down an infinite feed with variable speed,
+  // the occasional pause to "watch" a post, and the odd scroll back up. Each
+  // call randomly picks a style (flick / cruise / fling) so the rhythm is uneven.
+  function feedScroll(done) {
+    const dir = chance(0.92) ? 1 : -1; // feeds go down; sometimes back up a bit
+    const style = Math.random();
+    let span, chunks, gapLo, gapHi;
+    if (style < 0.5) {          // cruise: steady medium-fast scroll
+      span = rnd(0.8, 1.5); chunks = irnd(6, 12); gapLo = 18; gapHi = 55;
+    } else if (style < 0.85) {  // flick: short and fast
+      span = rnd(0.6, 1.2); chunks = irnd(3, 6); gapLo = 12; gapHi = 35;
+    } else {                    // fling: big, very fast swipe
+      span = rnd(1.6, 2.6); chunks = irnd(4, 8); gapLo = 8; gapHi = 22;
+    }
+    const total = dir * window.innerHeight * span;
+    let n = 0;
+    const doChunk = () => {
+      n++;
+      const frac = easeInOut(n / chunks) - easeInOut((n - 1) / chunks);
+      const dy = total * frac;
+      window.scrollBy(0, dy);
+      document.dispatchEvent(new WheelEvent("wheel", { deltaY: dy, bubbles: true }));
+      if (n < chunks) {
+        setTimeout(doChunk, rnd(gapLo, gapHi));
+      } else if (done) {
+        // Sometimes stop to "watch" a post, otherwise keep flicking quickly.
+        setTimeout(done, chance(0.3) ? rnd(900, 3500) : rnd(120, 500));
+      }
+    };
+    doChunk();
+  }
+
   // Aimless cursor drift, like a person resting/moving the mouse while reading.
   function wander(done) {
     const tx = clamp(cx + rnd(-250, 250), 5, window.innerWidth - 5);
@@ -177,6 +210,14 @@
     // function plus a type tag used to pick a natural follow-up pause.
     function pickAction() {
       const r = Math.random();
+      // Social/feed sites: mostly fast, continuous scrolling with the odd
+      // cursor drift or click, rarely a real pause.
+      if (resp.social && resp.scroll) {
+        if (r < 0.75) return { fn: feedScroll, type: "feed" };
+        if (r < 0.86) return { fn: wander, type: "wander" };
+        if (resp.click && r < 0.95) return { fn: humanClick, type: "click" };
+        return { fn: null, type: "read" };
+      }
       if (resp.click && resp.scroll) {
         if (r < 0.45) return { fn: humanScroll, type: "scroll" };
         if (r < 0.65) return { fn: wander, type: "wander" };
@@ -202,14 +243,15 @@
     function pauseAfter(type) {
       let lo, hi;
       switch (type) {
+        case "feed":   lo = 0.15; hi = 0.7; break; // keep flicking the feed
         case "scroll": lo = 0.7; hi = 2.4; break;  // read what scrolled into view
         case "click":  lo = 1.4; hi = 3.6; break;  // absorb the result of a click
         case "wander": lo = 0.3; hi = 1.0; break;  // quick drift, keep going
         default:       lo = 1.6; hi = 4.2; break;  // "read" — the long dwell
       }
       let delay = base * (lo + gauss() * (hi - lo));
-      // Occasionally a person gets distracted / reads for much longer.
-      if (chance(0.12)) delay += rnd(2000, 6000);
+      // Occasionally a person gets distracted / lingers much longer (rarer on feeds).
+      if (chance(type === "feed" ? 0.06 : 0.12)) delay += rnd(2000, 6000);
       return delay;
     }
 
