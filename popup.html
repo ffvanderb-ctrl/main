@@ -14,8 +14,12 @@
 
   <main>
     <section class="block">
-      <label class="field-label" for="sites">Websites (one per line)</label>
+      <div class="label-row">
+        <label class="field-label" for="sites">Websites (one per line)</label>
+        <button id="loadPopular" class="link-btn" type="button">Load 100+ popular sites</button>
+      </div>
       <textarea id="sites" rows="6" placeholder="example.com&#10;https://www.wikipedia.org"></textarea>
+      <div class="hint" id="count"></div>
     </section>
 
     <section class="block grid">
@@ -33,6 +37,7 @@
       <label><input type="checkbox" id="scroll" /> Scroll the page</label>
       <label><input type="checkbox" id="click" /> Click elements</label>
       <label><input type="checkbox" id="loop" /> Loop forever</label>
+      <label><input type="checkbox" id="shuffle" /> Randomize visit order</label>
     </section>
 
     <section class="block actions">
@@ -44,6 +49,7 @@
     <p id="msg" class="msg"></p>
   </main>
 
+  <script src="sites.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

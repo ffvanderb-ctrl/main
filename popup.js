@@ -10,7 +10,8 @@ function readForm() {
     actionIntervalSeconds: Math.max(1, parseInt(el("interval").value, 10) || 3),
     scroll: el("scroll").checked,
     click: el("click").checked,
-    loop: el("loop").checked
+    loop: el("loop").checked,
+    shuffle: el("shuffle").checked
   };
 }
 
@@ -21,6 +22,22 @@ function fillForm(config) {
   el("scroll").checked = config.scroll;
   el("click").checked = config.click;
   el("loop").checked = config.loop;
+  el("shuffle").checked = config.shuffle;
+  updateCount();
+}
+
+function updateCount() {
+  const n = el("sites").value.split("\n").map((s) => s.trim()).filter(Boolean).length;
+  el("count").textContent = n ? `${n} site${n === 1 ? "" : "s"} in list` : "";
+}
+
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
 }
 
 function renderRunState(state) {
@@ -58,6 +75,18 @@ async function init() {
   fillForm(state.config);
   renderRunState(state);
 }
+
+el("loadPopular").addEventListener("click", () => {
+  // Merge the built-in list with anything already there, de-duplicated,
+  // in shuffled order so the browsing pattern isn't predictable.
+  const existing = el("sites").value.split("\n").map((s) => s.trim()).filter(Boolean);
+  const merged = Array.from(new Set([...existing, ...POPULAR_SITES]));
+  el("sites").value = shuffle(merged).join("\n");
+  updateCount();
+  flash(`Loaded ${POPULAR_SITES.length} popular sites`);
+});
+
+el("sites").addEventListener("input", updateCount);
 
 el("save").addEventListener("click", async () => {
   await send({ type: "saveConfig", config: readForm() });

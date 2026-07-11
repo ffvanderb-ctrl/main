@@ -10,19 +10,42 @@ const DEFAULT_CONFIG = {
     "https://example.com",
     "https://www.wikipedia.org"
   ],
-  dwellSeconds: 30,          // how long to spend on each site
+  dwellSeconds: 30,          // baseline time to spend on each site (varied ±40%)
   actionIntervalSeconds: 3,  // seconds between on-page actions
   loop: false,               // restart from the top after the last site
   scroll: true,              // allow scrolling
-  click: true                // allow clicking elements
+  click: true,               // allow clicking elements
+  shuffle: false             // randomize the order sites are visited
 };
 
 const DEFAULT_RUNTIME = {
   running: false,
   tabId: null,
   currentIndex: 0,
-  siteDeadline: 0
+  siteDeadline: 0,
+  order: []                  // the actual visit order for this run
 };
+
+function shuffleArray(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// Vary the dwell time per site so visits don't all last exactly the same —
+// real browsing is uneven.
+function nextDeadline(config) {
+  const factor = 0.6 + Math.random() * 0.8; // 60%–140% of the baseline
+  return Date.now() + config.dwellSeconds * 1000 * factor;
+}
+
+function buildOrder(config) {
+  const sites = (config.sites || []).map(normalizeUrl).filter(Boolean);
+  return config.shuffle ? shuffleArray(sites) : sites;
+}
 
 async function getConfig() {
   const { config } = await chrome.storage.local.get("config");
@@ -58,16 +81,17 @@ async function scheduleSafetyAlarm(deadline) {
 
 async function start() {
   const config = await getConfig();
-  const sites = (config.sites || []).map(normalizeUrl).filter(Boolean);
-  if (sites.length === 0) return { ok: false, error: "No valid sites configured." };
+  const order = buildOrder(config);
+  if (order.length === 0) return { ok: false, error: "No valid sites configured." };
 
-  const deadline = Date.now() + config.dwellSeconds * 1000;
-  const tab = await chrome.tabs.create({ url: sites[0], active: true });
+  const deadline = nextDeadline(config);
+  const tab = await chrome.tabs.create({ url: order[0], active: true });
   await setRuntime({
     running: true,
     tabId: tab.id,
     currentIndex: 0,
-    siteDeadline: deadline
+    siteDeadline: deadline,
+    order
   });
   await scheduleSafetyAlarm(deadline);
   return { ok: true };
@@ -83,23 +107,25 @@ async function advanceSite() {
   const rt = await getRuntime();
   if (!rt.running) return;
   const config = await getConfig();
-  const sites = (config.sites || []).map(normalizeUrl).filter(Boolean);
+  let order = rt.order && rt.order.length ? rt.order : buildOrder(config);
 
   let next = rt.currentIndex + 1;
-  if (next >= sites.length) {
+  if (next >= order.length) {
     if (config.loop) {
       next = 0;
+      // Reshuffle each cycle so repeated loops don't repeat the same pattern.
+      if (config.shuffle) order = shuffleArray(order);
     } else {
       await stop();
       return;
     }
   }
 
-  const deadline = Date.now() + config.dwellSeconds * 1000;
-  await setRuntime({ currentIndex: next, siteDeadline: deadline });
+  const deadline = nextDeadline(config);
+  await setRuntime({ currentIndex: next, siteDeadline: deadline, order });
   await scheduleSafetyAlarm(deadline);
   try {
-    await chrome.tabs.update(rt.tabId, { url: sites[next] });
+    await chrome.tabs.update(rt.tabId, { url: order[next] });
   } catch (e) {
     // Tab is gone — stop the run.
     await stop();
@@ -151,12 +177,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     switch (msg && msg.type) {
       case "getState": {
         const [config, runtime] = await Promise.all([getConfig(), getRuntime()]);
-        const sites = (config.sites || []).map(normalizeUrl).filter(Boolean);
+        const order = runtime.running && runtime.order && runtime.order.length
+          ? runtime.order
+          : (config.sites || []).map(normalizeUrl).filter(Boolean);
         sendResponse({
           config,
           runtime,
-          currentUrl: runtime.running ? sites[runtime.currentIndex] || null : null,
-          total: sites.length
+          currentUrl: runtime.running ? order[runtime.currentIndex] || null : null,
+          total: order.length
         });
         break;
       }
