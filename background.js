@@ -35,11 +35,23 @@ function shuffleArray(arr) {
   return a;
 }
 
-// Vary the dwell time per site so visits don't all last exactly the same —
-// real browsing is uneven.
+// Vary the dwell time per site so visits don't all last the same — real
+// browsing is very uneven. Rather than a flat ±band, draw from a mixture:
+// most visits are "normal", some are quick glances, a few are long reads.
+// This gives a heavier-tailed, more human distribution of visit lengths.
 function nextDeadline(config) {
-  const factor = 0.6 + Math.random() * 0.8; // 60%–140% of the baseline
-  return Date.now() + config.dwellSeconds * 1000 * factor;
+  const r = Math.random();
+  let factor;
+  if (r < 0.2) {
+    factor = 0.25 + Math.random() * 0.35;   // quick glance: 25%–60%
+  } else if (r < 0.8) {
+    factor = 0.7 + Math.random() * 0.7;     // normal: 70%–140%
+  } else {
+    factor = 1.5 + Math.random() * 1.3;     // long read: 150%–280%
+  }
+  const ms = config.dwellSeconds * 1000 * factor;
+  // Keep it sane regardless of baseline.
+  return Date.now() + Math.max(4000, ms);
 }
 
 function buildOrder(config) {

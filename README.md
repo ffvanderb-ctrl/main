@@ -17,13 +17,18 @@ build an accurate profile of what you actually do.
   news, shopping, reference, media, finance, travel, and more) in random order.
 - **Editable site list** — enter one URL per line; add, remove, or reorder any time.
 - **Human-like behavior** — curved cursor movement with mouse events, momentum
-  scrolling (and occasional scroll-ups), reading pauses, hover-before-click, and
-  irregular, non-uniform timing.
+  scrolling (quick flicks vs. slow read-scrolls, occasional scroll-ups), reading
+  pauses, and hover-before-click.
+- **Fully randomized timing** — the gap between actions is drawn from a
+  Gaussian-ish distribution *and* differs by what just happened: a person reads
+  longer after a click than after a quick cursor drift. Nothing is on a fixed
+  interval.
+- **Varied dwell time** — each site's visit length is drawn from a mixture (most
+  normal, some quick glances, a few long reads), so no two visits match.
 - **Randomized visit order** — shuffle the list so the pattern isn't predictable;
   reshuffles on every loop.
-- **Varied dwell time** — each site gets a randomized amount of time (±40% of your
-  baseline) instead of an identical interval.
-- **Adjustable pace** — set the baseline seconds per site and how often it acts.
+- **Adjustable pace** — set the baseline seconds per site and how often it acts;
+  the extension randomizes around those baselines.
 - **Toggle behaviors** — enable/disable scrolling and clicking independently.
 - **Loop mode** — repeat continuously, or run through once and stop.
 - **Start/Stop** from the toolbar popup, with live progress.

@@ -107,10 +107,16 @@
   }
 
   // Scroll with momentum: several eased wheel-like nudges rather than a jump.
+  // The *style* varies so scroll timing looks natural — sometimes a quick flick,
+  // sometimes a slow, careful read-scroll — and the per-nudge gap is randomized.
   function humanScroll(done) {
     const dir = chance(0.85) ? 1 : -1; // mostly down, sometimes back up
-    const total = dir * rnd(window.innerHeight * 0.3, window.innerHeight * 0.9);
-    const chunks = irnd(4, 9);
+    const flick = chance(0.35);        // quick flick vs. slow read-scroll
+    const span = flick ? rnd(0.5, 1.1) : rnd(0.2, 0.6);
+    const total = dir * window.innerHeight * span;
+    const chunks = flick ? irnd(3, 6) : irnd(6, 12);
+    const gapLo = flick ? 25 : 70;
+    const gapHi = flick ? 70 : 180;
     let n = 0;
     const doChunk = () => {
       n++;
@@ -120,9 +126,9 @@
       // Some analytics listen for wheel events specifically.
       document.dispatchEvent(new WheelEvent("wheel", { deltaY: dy, bubbles: true }));
       if (n < chunks) {
-        setTimeout(doChunk, rnd(40, 110));
+        setTimeout(doChunk, rnd(gapLo, gapHi));
       } else if (done) {
-        setTimeout(done, rnd(60, 200));
+        setTimeout(done, rnd(80, 260));
       }
     };
     doChunk();
@@ -167,36 +173,58 @@
     const base = resp.actionIntervalMs;
 
     // Choose the next thing to do, weighted to look like reading with occasional
-    // interaction — not a metronome of identical clicks.
+    // interaction — not a metronome of identical actions. Returns the action
+    // function plus a type tag used to pick a natural follow-up pause.
     function pickAction() {
       const r = Math.random();
       if (resp.click && resp.scroll) {
-        if (r < 0.45) return humanScroll;
-        if (r < 0.65) return wander;
-        if (r < 0.85) return humanClick;
-        return null; // idle / read
+        if (r < 0.45) return { fn: humanScroll, type: "scroll" };
+        if (r < 0.65) return { fn: wander, type: "wander" };
+        if (r < 0.85) return { fn: humanClick, type: "click" };
+        return { fn: null, type: "read" };
       }
-      if (resp.scroll) return r < 0.7 ? humanScroll : (r < 0.9 ? wander : null);
-      if (resp.click) return r < 0.6 ? humanClick : (r < 0.8 ? wander : null);
-      return null;
+      if (resp.scroll) {
+        if (r < 0.7) return { fn: humanScroll, type: "scroll" };
+        return { fn: r < 0.9 ? wander : null, type: r < 0.9 ? "wander" : "read" };
+      }
+      if (resp.click) {
+        if (r < 0.6) return { fn: humanClick, type: "click" };
+        return { fn: r < 0.8 ? wander : null, type: r < 0.8 ? "wander" : "read" };
+      }
+      return { fn: null, type: "read" };
     }
 
-    function schedule() {
+    // The pause that follows an action is what really sells "human". A person
+    // dwells differently after each kind of action: they read the newly-revealed
+    // content after a scroll, take a beat to absorb a page after a click, barely
+    // pause after idle cursor drift, and linger longest when just reading. Each
+    // is randomized (Gaussian-ish) and scaled by the configured pace.
+    function pauseAfter(type) {
+      let lo, hi;
+      switch (type) {
+        case "scroll": lo = 0.7; hi = 2.4; break;  // read what scrolled into view
+        case "click":  lo = 1.4; hi = 3.6; break;  // absorb the result of a click
+        case "wander": lo = 0.3; hi = 1.0; break;  // quick drift, keep going
+        default:       lo = 1.6; hi = 4.2; break;  // "read" — the long dwell
+      }
+      let delay = base * (lo + gauss() * (hi - lo));
+      // Occasionally a person gets distracted / reads for much longer.
+      if (chance(0.12)) delay += rnd(2000, 6000);
+      return delay;
+    }
+
+    function step() {
       if (Date.now() >= endTime) {
         chrome.runtime.sendMessage({ type: "siteDone", index: resp.index });
         return;
       }
-      // Non-uniform gap; every so often a long "reading" pause.
-      let delay = base * (0.5 + gauss() * 1.2);
-      if (chance(0.15)) delay += rnd(1500, 4000);
-      setTimeout(() => {
-        const action = pickAction();
-        if (action) action(schedule);
-        else schedule(); // idle tick
-      }, delay);
+      const { fn, type } = pickAction();
+      const next = () => setTimeout(step, pauseAfter(type));
+      if (fn) fn(next);
+      else next(); // idle read
     }
 
     // Settle first, as a person would before doing anything.
-    setTimeout(schedule, rnd(800, 2200));
+    setTimeout(step, rnd(900, 2600));
   });
 })();
