@@ -17,8 +17,8 @@ function defaultCategories() {
 }
 
 const DEFAULT_CONFIG = {
-  categories: defaultCategories(),
-  customSites: [],           // user-added URLs, on top of the enabled categories
+  categories: defaultCategories(), // checkbox state, used to add/remove in bulk
+  sites: defaultSites(),     // the editable visit list (authoritative for the run)
   autoTiming: true,          // pick natural timing automatically (hides manual fields)
   dwellSeconds: 30,          // manual baseline time per site (used when autoTiming off)
   actionIntervalSeconds: 3,  // manual seconds between actions (used when autoTiming off)
@@ -57,38 +57,24 @@ function shuffleArray(arr) {
   return a;
 }
 
-function normalizeUrl(url) {
-  const trimmed = (url || "").trim();
-  if (!trimmed) return null;
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  return "https://" + trimmed;
-}
-
-// A run entry: { url, category, search?, chat? }.
-function normalizeEntry(e, category) {
-  if (typeof e === "string") {
-    const u = normalizeUrl(e);
-    return u ? { url: u, category } : null;
-  }
-  const u = normalizeUrl(e.url);
-  if (!u) return null;
-  return { url: u, category, search: e.search || null, chat: !!e.chat };
-}
-
-// Build the de-duplicated active list from enabled categories + custom sites.
+// Build the de-duplicated run list from config.sites (the editable URL list).
+// Each URL's behavior (search query, chatbot typing, social, video) is recovered
+// from the catalog; URLs not in the catalog are visited as plain "custom" sites.
 function buildEntries(config) {
-  const cats = { ...defaultCategories(), ...(config.categories || {}) };
   const seen = new Set();
   const out = [];
-  const push = (raw, category) => {
-    const ne = normalizeEntry(raw, category);
-    if (ne && !seen.has(ne.url)) { seen.add(ne.url); out.push(ne); }
-  };
-  for (const meta of CATEGORY_META) {
-    if (!cats[meta.key]) continue;
-    for (const e of (SITE_CATEGORIES[meta.key] || [])) push(e, meta.key);
+  for (const raw of (config.sites || [])) {
+    const url = normalizeUrl(raw);
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    const m = siteMeta(url);
+    out.push({
+      url,
+      category: m ? m.category : "custom",
+      search: m ? m.search : null,
+      chat: m ? !!m.chat : false
+    });
   }
-  for (const c of (config.customSites || [])) push(c, "custom");
   return out;
 }
 
@@ -131,9 +117,19 @@ function nextDeadline(config, entry) {
 async function getConfig() {
   const { config } = await chrome.storage.local.get("config");
   const merged = { ...DEFAULT_CONFIG, ...(config || {}) };
-  // Migrate the old flat `sites` list into customSites if present.
-  if (config && Array.isArray(config.sites) && !Array.isArray(config.customSites)) {
-    merged.customSites = config.sites;
+  // Migrate the older category+customSites model into a flat `sites` list.
+  if (config && !Array.isArray(config.sites)) {
+    const cats = { ...defaultCategories(), ...(config.categories || {}) };
+    const seen = new Set(), list = [];
+    for (const meta of CATEGORY_META) {
+      if (!cats[meta.key]) continue;
+      for (const u of categoryUrls(meta.key)) if (!seen.has(u)) { seen.add(u); list.push(u); }
+    }
+    for (const c of (config.customSites || [])) {
+      const u = normalizeUrl(c);
+      if (u && !seen.has(u)) { seen.add(u); list.push(u); }
+    }
+    merged.sites = list.length ? list : defaultSites();
   }
   return merged;
 }

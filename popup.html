@@ -14,16 +14,16 @@
 
   <main>
     <section class="block">
-      <div class="label-row">
-        <label class="field-label">Site categories</label>
-        <span class="hint" id="count"></span>
-      </div>
+      <label class="field-label">Site categories <span class="hint">— tick to add a set, untick to remove it</span></label>
       <div id="categories" class="cats"></div>
     </section>
 
     <section class="block">
-      <label class="field-label" for="sites">Extra custom sites (one per line)</label>
-      <textarea id="sites" rows="3" placeholder="example.com&#10;mysite.org"></textarea>
+      <div class="label-row">
+        <label class="field-label" for="sites">Websites it will visit (one per line — editable)</label>
+        <span class="hint" id="count"></span>
+      </div>
+      <textarea id="sites" rows="7" placeholder="example.com&#10;mysite.org"></textarea>
     </section>
 
     <section class="block">

@@ -32,7 +32,7 @@ function renderCategories(categories) {
     cb.type = "checkbox";
     cb.dataset.key = meta.key;
     cb.checked = on;
-    cb.addEventListener("change", () => { updateCount(); });
+    cb.addEventListener("change", () => onCategoryToggle(meta.key, cb.checked));
     const lbl = document.createElement("span");
     lbl.className = "cat-label";
     lbl.textContent = meta.label;
@@ -62,6 +62,39 @@ function updateAutoVisibility() {
   el("autoHint").classList.toggle("hidden", !auto);
 }
 
+// --- the editable visit list (the textarea is the source of truth) ---------
+function currentListUrls() {
+  return el("sites").value.split("\n").map((s) => s.trim()).filter(Boolean);
+}
+function setListUrls(arr) {
+  el("sites").value = arr.join("\n");
+}
+const norm = (u) => normalizeUrl(u) || u.trim();
+
+// Toggling a category adds its sites to the list, or removes them — except any
+// URL still covered by another enabled category, which stays.
+function onCategoryToggle(key, checked) {
+  const list = currentListUrls();
+  const catUrls = categoryUrls(key);
+
+  if (checked) {
+    const present = new Set(list.map(norm));
+    for (const u of catUrls) if (!present.has(u)) { list.push(u); present.add(u); }
+    setListUrls(list);
+  } else {
+    const drop = new Set(catUrls);
+    // URLs to keep because another enabled category also includes them.
+    const keep = new Set();
+    el("categories").querySelectorAll("input[data-key]").forEach((cb) => {
+      if (cb.checked && cb.dataset.key !== key) {
+        for (const u of categoryUrls(cb.dataset.key)) keep.add(u);
+      }
+    });
+    setListUrls(list.filter((u) => !(drop.has(norm(u)) && !keep.has(norm(u)))));
+  }
+  updateCount();
+}
+
 function readCategories() {
   const out = {};
   el("categories").querySelectorAll("input[data-key]").forEach((cb) => {
@@ -73,7 +106,7 @@ function readCategories() {
 function readForm() {
   return {
     categories: readCategories(),
-    customSites: el("sites").value.split("\n").map((s) => s.trim()).filter(Boolean),
+    sites: currentListUrls(),
     autoTiming: el("auto").checked,
     dwellSeconds: Math.max(3, parseInt(el("dwell").value, 10) || 30),
     actionIntervalSeconds: Math.max(1, parseInt(el("interval").value, 10) || 3),
@@ -86,7 +119,7 @@ function readForm() {
 
 function fillForm(config) {
   renderCategories(config.categories || {});
-  el("sites").value = (config.customSites || []).join("\n");
+  el("sites").value = (config.sites || []).join("\n");
   el("auto").checked = config.autoTiming !== false;
   el("dwell").value = config.dwellSeconds;
   el("interval").value = config.actionIntervalSeconds;
@@ -98,21 +131,10 @@ function fillForm(config) {
   updateCount();
 }
 
-// Count the de-duplicated active list from the current form selections.
+// The visit list is exactly what's in the box (de-duplicated for the count).
 function updateCount() {
-  const cats = readCategories();
-  const seen = new Set();
-  for (const meta of CATEGORY_META) {
-    if (!cats[meta.key]) continue;
-    for (const e of (SITE_CATEGORIES[meta.key] || [])) {
-      const u = (typeof e === "string" ? e : e.url).toLowerCase();
-      seen.add(u);
-    }
-  }
-  el("sites").value.split("\n").map((s) => s.trim()).filter(Boolean)
-    .forEach((s) => seen.add(s.toLowerCase()));
-  const n = seen.size;
-  el("count").textContent = n ? `${n} sites active` : "no sites selected";
+  const n = new Set(currentListUrls().map(norm)).size;
+  el("count").textContent = n ? `${n} sites in list` : "list is empty";
 }
 
 function renderRunState(state) {

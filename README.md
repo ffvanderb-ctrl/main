@@ -19,9 +19,12 @@ build an accurate profile of what you actually do.
   crypto, health & fitness, travel & food, plus Adult and Gambling (both **off by
   default**). Languages/regions (all opt-in): German, French, Spanish, Italian,
   Dutch, Portuguese, Russian, Japanese, Chinese, Korean, Arabic, and Indian sites.
-  Toggling a category **off removes its sites from the active list** immediately.
+- **Categories fill the editable list** — ticking a category **adds its sites into
+  the visible "Websites it will visit" box**, and unticking **removes them** (any
+  site still covered by another enabled category stays). The box is fully editable,
+  so you can add or delete individual sites by hand; that list is exactly what runs.
 - **Language/region toggles** — flip on "German websites", "French websites", etc.
-  to fold sets of that country's popular sites into the decoy traffic.
+  to fold sets of that country's popular sites into the list.
 - **Automatic timing (with manual override)** — by default all timing (per-site
   dwell, gaps between actions, scrolling) is chosen automatically to mimic human
   behavior. Turn **Automatic timing** off and the manual "seconds per site" and
@@ -37,9 +40,9 @@ build an accurate profile of what you actually do.
 - **Browse-only, by design** — the clicker never performs state-changing actions:
   no commenting/posting/saving/liking/following on social, no add-to-cart /
   checkout / payment on shops, no bets/deposits on gambling sites, no sign-ups.
-- **Human-like behavior** — curved cursor movement with mouse events, momentum
-  scrolling (quick flicks vs. slow read-scrolls, occasional scroll-ups), reading
-  pauses, and hover-before-click.
+- **Human-like behavior** — curved cursor movement with mouse events, scroll-heavy
+  browsing (quick flicks vs. slow read-scrolls, occasional scroll-ups) so ordinary
+  pages look actively read, reading pauses, and hover-before-click.
 - **Feed-aware on social sites** — on recognized social/feed sites (Reddit, X,
   Facebook, Instagram, TikTok, YouTube, etc.) it lingers much longer and switches
   to fast, continuous, variable-speed feed scrolling (cruise / flick / fling)
@@ -69,9 +72,10 @@ build an accurate profile of what you actually do.
 ## Usage
 
 1. Click the toolbar icon.
-2. Under **Site categories**, tick the topics and languages you want. Adult/
-   Gambling and all languages are off unless you opt in. Optionally add extra URLs
-   in the custom box. The counter shows how many sites are active.
+2. Under **Site categories**, tick the topics and languages you want — their sites
+   drop into the **Websites it will visit** box below. Untick to remove them. Adult/
+   Gambling and all languages are off unless you opt in. Edit the box freely (add or
+   remove individual sites); the counter shows how many are in the list.
 3. Leave **Automatic timing** on to let it pace itself naturally, or turn it off to
    set **Seconds per site** and **Action every (sec)** yourself.
 4. Check the behaviors you want (Scroll / Click / Loop / Randomize visit order).
@@ -96,7 +100,9 @@ build an accurate profile of what you actually do.
   `<video>`, it asks the worker to extend that site's deadline (`watchVideo`).
 - Timing is automatic by default (`autoTiming`); turning it off uses your manual
   seconds-per-site / action-interval values as the baseline.
-- The active visit list = enabled categories + your custom sites, de-duplicated.
+- The visit list is the editable box; category toggles just add/remove sites in it.
+  Each URL's behavior (decoy search, chatbot typing, social feed, video) is looked
+  up from the catalog, so even a hand-edited flat list keeps its per-site smarts.
 - Settings and run state are stored with `chrome.storage.local`.
 
 ## Effectiveness & limitations

@@ -894,8 +894,53 @@ function randomQuery() {
   return _pick(forms).replace(/\s+/g, " ").trim();
 }
 
+// ---- URL helpers & catalog lookup ------------------------------------------
+// The visit list is a flat list of URLs the user can edit. Per-site behavior
+// (search-query URLs, chatbot typing, social feed, category) is recovered by
+// looking each URL up in the catalog, so a flat list keeps all its smarts.
+
+function normalizeUrl(url) {
+  const t = (url || "").trim();
+  if (!t) return null;
+  return /^https?:\/\//i.test(t) ? t : "https://" + t;
+}
+
+function catUrl(e) { return normalizeUrl(typeof e === "string" ? e : e.url); }
+
+// url -> { category, search, chat } (first category in catalog order wins).
+const URL_META = {};
+for (const meta of CATEGORY_META) {
+  for (const e of (SITE_CATEGORIES[meta.key] || [])) {
+    const url = catUrl(e);
+    if (url && !URL_META[url]) {
+      URL_META[url] = { category: meta.key, search: (typeof e === "object" && e.search) || null, chat: typeof e === "object" && !!e.chat };
+    }
+  }
+}
+
+function siteMeta(url) { const u = normalizeUrl(url); return u ? (URL_META[u] || null) : null; }
+
+// Normalized URLs belonging to a category (in catalog order).
+function categoryUrls(key) {
+  return (SITE_CATEGORIES[key] || []).map(catUrl).filter(Boolean);
+}
+
+// The default visit list: URLs from every default-on category, de-duplicated.
+function defaultSites() {
+  const seen = new Set(), out = [];
+  for (const meta of CATEGORY_META) {
+    if (!meta.default) continue;
+    for (const u of categoryUrls(meta.key)) if (!seen.has(u)) { seen.add(u); out.push(u); }
+  }
+  return out;
+}
+
 // ---- expose in both service-worker and window contexts ---------------------
 const _g = (typeof self !== "undefined") ? self : (typeof window !== "undefined" ? window : this);
 _g.SITE_CATEGORIES = SITE_CATEGORIES;
 _g.CATEGORY_META = CATEGORY_META;
 _g.randomQuery = randomQuery;
+_g.normalizeUrl = normalizeUrl;
+_g.siteMeta = siteMeta;
+_g.categoryUrls = categoryUrls;
+_g.defaultSites = defaultSites;

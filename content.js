@@ -127,9 +127,10 @@
   // The *style* varies so scroll timing looks natural — sometimes a quick flick,
   // sometimes a slow, careful read-scroll — and the per-nudge gap is randomized.
   function humanScroll(done) {
-    const dir = chance(0.85) ? 1 : -1; // mostly down, sometimes back up
-    const flick = chance(0.35);        // quick flick vs. slow read-scroll
-    const span = flick ? rnd(0.5, 1.1) : rnd(0.2, 0.6);
+    const dir = chance(0.82) ? 1 : -1; // mostly down, sometimes back up
+    const flick = chance(0.4);         // quick flick vs. slow read-scroll
+    // Cover a bit more of the page per scroll so browsing looks more active.
+    const span = flick ? rnd(0.7, 1.4) : rnd(0.35, 0.9);
     const total = dir * window.innerHeight * span;
     const chunks = flick ? irnd(3, 6) : irnd(6, 12);
     const gapLo = flick ? 25 : 70;
@@ -341,15 +342,17 @@
         if (allowClick && r < 0.95) return { fn: humanClick, type: "click" };
         return { fn: null, type: "read" };
       }
+      // Regular (non-video, non-feed) pages: scroll-dominant, so browsing an
+      // article or listing looks active rather than mostly idle.
       if (allowClick && resp.scroll) {
-        if (r < 0.45) return { fn: humanScroll, type: "scroll" };
-        if (r < 0.65) return { fn: wander, type: "wander" };
-        if (r < 0.85) return { fn: humanClick, type: "click" };
+        if (r < 0.62) return { fn: humanScroll, type: "scroll" };
+        if (r < 0.74) return { fn: wander, type: "wander" };
+        if (r < 0.90) return { fn: humanClick, type: "click" };
         return { fn: null, type: "read" };
       }
       if (resp.scroll) {
-        if (r < 0.7) return { fn: humanScroll, type: "scroll" };
-        return { fn: r < 0.9 ? wander : null, type: r < 0.9 ? "wander" : "read" };
+        if (r < 0.82) return { fn: humanScroll, type: "scroll" };
+        return { fn: r < 0.93 ? wander : null, type: r < 0.93 ? "wander" : "read" };
       }
       if (allowClick) {
         if (r < 0.6) return { fn: humanClick, type: "click" };
