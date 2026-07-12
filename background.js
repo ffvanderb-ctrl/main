@@ -96,6 +96,11 @@ function isSocialEntry(entry) {
   return !!entry && entry.category === "social";
 }
 
+function hostOf(u) {
+  try { return new URL(u).hostname.replace(/^www\./, "").toLowerCase(); }
+  catch { return ""; }
+}
+
 // Vary the dwell per site so visits don't all last the same — real browsing is
 // very uneven. Draw from a mixture (most normal, some quick glances, a few long
 // reads); social/feed sites linger much longer, as people doom-scroll.
@@ -281,6 +286,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
         const config = await getConfig();
         const entry = rt.order[rt.currentIndex] || {};
+        // True only while still on the search engine's own results page — once a
+        // result has been clicked (different host) we don't try to click again.
+        const searchClickable = entry.category === "search" &&
+          hostOf((sender.tab && sender.tab.url) || "") === hostOf(entry.url);
         sendResponse({
           run: true,
           index: rt.currentIndex,
@@ -290,6 +299,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           click: config.click,
           category: entry.category || "custom",
           social: isSocialEntry(entry),
+          searchClickable,
           // On typed-chatbot pages, hand over a query to enter and suppress
           // link-clicking so it doesn't wander off the chat.
           chatbot: !!entry.chat,

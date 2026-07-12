@@ -35,6 +35,9 @@ build an accurate profile of what you actually do.
 - **Random decoy searches** — on search engines it visits a real results page for
   a randomly generated query, and on AI chatbots it types and submits a random
   query — the *TrackMeNot* technique, which pollutes your search/interest profile.
+- **Clicks through to results** — after a search it sometimes (~55%) clicks one of
+  the organic results and browses it, like a real user following a link. It biases
+  toward the top results and **skips sponsored/ad results** (no ad-clicking).
 - **Add your own sites** — a custom box adds extra URLs on top of the selected
   categories (one per line).
 - **Browse-only, by design** — the clicker never performs state-changing actions:

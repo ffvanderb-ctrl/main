@@ -231,6 +231,67 @@
     }, rnd(250, 600));
   }
 
+  // ---- search-result click -------------------------------------------------
+  // On a search-engine results page, sometimes click through to an organic
+  // result like a real user. Sponsored/ad results are deliberately skipped
+  // (we don't click ads), as are the engine's own links.
+  function registrableDomain(host) {
+    return host.replace(/^www\./, "").split(".").slice(-2).join(".");
+  }
+
+  function isSponsored(a) {
+    let n = a;
+    for (let i = 0; i < 6 && n; i++, n = n.parentElement) {
+      const label = (n.getAttribute && (n.getAttribute("aria-label") || "")) || "";
+      if (/sponsor|\bads?\b|promoted/i.test(label)) return true;
+      if (n.id && /^(tads|tadsb|bottomads|ads)/i.test(n.id)) return true;
+      if (n.dataset && /sponsor|text-ad/i.test(Object.keys(n.dataset).join(" "))) return true;
+    }
+    return false;
+  }
+
+  function searchResultLinks() {
+    const pageDomain = registrableDomain(location.hostname);
+    const out = [];
+    for (const a of document.querySelectorAll("a[href]")) {
+      if (!isVisible(a) || a.target === "_blank") continue;
+      let host;
+      try { host = new URL(a.href, location.href).hostname; } catch (e) { continue; }
+      if (!/^https?:/i.test(a.href)) continue;
+      if (registrableDomain(host) === pageDomain) continue; // skip engine's own links
+      if ((a.innerText || "").trim().length < 5) continue;  // needs a real title
+      if (isSponsored(a)) continue;
+      out.push({ el: a, top: a.getBoundingClientRect().top });
+    }
+    return out;
+  }
+
+  function clickSearchResult(done) {
+    let cands;
+    try { cands = searchResultLinks(); } catch (e) { cands = []; }
+    if (!cands.length) return done && done();
+    cands.sort((a, b) => a.top - b.top);
+    // Bias toward the top results (squared random favors earlier entries).
+    const idx = Math.min(cands.length - 1, Math.floor(Math.random() * Math.random() * cands.length));
+    const el = cands[idx].el;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    setTimeout(() => {
+      const r = el.getBoundingClientRect();
+      const tx = clamp(r.left + r.width * rnd(0.2, 0.6), 2, window.innerWidth - 2);
+      const ty = clamp(r.top + r.height * rnd(0.3, 0.7), 2, window.innerHeight - 2);
+      moveTo(tx, ty, () => {
+        fire(el, "mouseover", tx, ty);
+        fire(el, "mousedown", tx, ty);
+        setTimeout(() => {
+          fire(el, "mouseup", tx, ty);
+          fire(el, "click", tx, ty);
+          try { el.click(); } catch (e) {} // ensure the browser follows the link
+          if (done) done();
+        }, rnd(60, 160));
+      });
+    }, rnd(300, 700));
+  }
+
   // ---- chatbot query typing ------------------------------------------------
   // Best-effort: find the main chat input, type a random decoy query with
   // human-like keystrokes, and submit. Chatbots that require a login and no
@@ -398,10 +459,16 @@
     checkVideo();
     setInterval(checkVideo, 5000);
 
-    // Settle first, as a person would before doing anything. On a chatbot page,
-    // type and submit the decoy query, then read/scroll the response.
+    // Settle first, as a person would before doing anything.
     if (resp.chatbot && resp.query) {
+      // Chatbot page: type and submit the decoy query, then read the response.
       setTimeout(() => typeQuery(resp.query, () => setTimeout(step, rnd(1500, 3500))), rnd(1200, 3000));
+    } else if (resp.searchClickable && allowClick && chance(0.55)) {
+      // Search results page: glance at the results, then click one ~55% of the
+      // time (otherwise just browse the results normally via step()).
+      setTimeout(() => {
+        humanScroll(() => clickSearchResult(() => setTimeout(step, rnd(1200, 2600))));
+      }, rnd(1500, 3500));
     } else {
       setTimeout(step, rnd(900, 2600));
     }
