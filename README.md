@@ -38,6 +38,9 @@ build an accurate profile of what you actually do.
 - **Clicks through to results** — after a search it sometimes (~55%) clicks one of
   the organic results and browses it, like a real user following a link. It biases
   toward the top results and **skips sponsored/ad results** (no ad-clicking).
+- **Closes popups quickly** — if a click opens a modal/overlay (cookie or newsletter
+  box, interstitial), ~54% of the time it snaps to the close "×" and dismisses it
+  fast, the way a person reflexively closes a popup.
 - **Add your own sites** — a custom box adds extra URLs on top of the selected
   categories (one per line).
 - **Browse-only, by design** — the clicker never performs state-changing actions:

@@ -207,6 +207,63 @@
     moveTo(tx, ty, done);
   }
 
+  // Detect a modal/overlay/popup that's currently showing (dialogs, cookie/
+  // newsletter boxes, lightboxes, interstitials).
+  function findPopup() {
+    const sel = '[role="dialog"], [aria-modal="true"], dialog[open], .modal, .popup,' +
+      ' .lightbox, [class*="popup"], [class*="modal"], [class*="overlay"],' +
+      ' [class*="lightbox"], [class*="interstitial"], [id*="popup"], [id*="modal"]';
+    for (const n of document.querySelectorAll(sel)) {
+      if (!isVisible(n)) continue;
+      const r = n.getBoundingClientRect();
+      if (r.width < 120 || r.height < 80) continue;
+      const st = getComputedStyle(n);
+      if (n.tagName !== "DIALOG" && st.position !== "fixed" && st.position !== "absolute") continue;
+      return n;
+    }
+    return null;
+  }
+
+  // Find the close/dismiss control inside a popup ("×", "close", "no thanks"…).
+  function closeControlIn(popup) {
+    const els = popup.querySelectorAll(
+      'button, a, [role="button"], [aria-label], [title], [data-dismiss], [class*="close"], [class*="dismiss"], span, i'
+    );
+    for (const el of els) {
+      if (!isVisible(el)) continue;
+      const attrs = ((el.getAttribute("aria-label") || "") + " " +
+        (el.getAttribute("title") || "") + " " + (el.getAttribute("class") || "")).toLowerCase();
+      const txt = (el.textContent || "").trim().toLowerCase();
+      if (/close|dismiss|no thanks|not now|maybe later|reject all|×|✕|✖|⨯|╳/i.test(attrs) ||
+          ["x", "×", "✕", "✖", "⨯", "╳"].includes(txt)) {
+        return el;
+      }
+    }
+    return null;
+  }
+
+  // Quickly click a popup's close button — a fast, reflexive dismissal.
+  function dismissPopupFast(popup, done) {
+    const btn = popup && closeControlIn(popup);
+    if (!btn) return done && done();
+    const r = btn.getBoundingClientRect();
+    const tx = clamp(r.left + r.width / 2, 2, window.innerWidth - 2);
+    const ty = clamp(r.top + r.height / 2, 2, window.innerHeight - 2);
+    // Snap the cursor over quickly (short delay, brief press) — no leisurely path.
+    setTimeout(() => {
+      cx = tx; cy = ty;
+      fire(btn, "mouseover", tx, ty);
+      fire(btn, "mousemove", tx, ty);
+      fire(btn, "mousedown", tx, ty);
+      setTimeout(() => {
+        fire(btn, "mouseup", tx, ty);
+        fire(btn, "click", tx, ty);
+        try { btn.click(); } catch (e) {}
+        if (done) done();
+      }, rnd(30, 90));
+    }, rnd(120, 350));
+  }
+
   function humanClick(done) {
     const cands = clickCandidates();
     if (cands.length === 0) return humanScroll(done);
@@ -224,7 +281,12 @@
           setTimeout(() => {
             fire(el, "mouseup", tx, ty);
             fire(el, "click", tx, ty);
-            if (done) done();
+            // If that click opened a popup/modal, 54% of the time close it fast.
+            setTimeout(() => {
+              const popup = findPopup();
+              if (popup && chance(0.54)) dismissPopupFast(popup, done);
+              else if (done) done();
+            }, rnd(250, 650));
           }, rnd(60, 160));
         }, rnd(120, 400));
       });
