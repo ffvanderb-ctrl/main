@@ -29,9 +29,11 @@ build an accurate profile of what you actually do.
   dwell, gaps between actions, scrolling) is chosen automatically to mimic human
   behavior. Turn **Automatic timing** off and the manual "seconds per site" and
   "action every (sec)" fields appear for you to set yourself.
-- **Video "watching"** — when a page has a real video playing (YouTube, Vimeo,
-  Twitch, streaming sites, or any embedded player), it keeps the video playing,
-  stays much longer (an extra ~0.5–3 min), and mostly sits still like a viewer.
+- **Video "watching"** — only kicks in when a video is **actually on screen**
+  (not one loaded further down a feed). Short social clips (Facebook/Instagram/
+  Shorts, etc.) are watched about one loop — occasionally a second — then scrolled
+  past, so it never sits looping the same clip for minutes. A large dedicated
+  player (a real watch page) is watched for a longer stretch and extends the stay.
 - **Random decoy searches** — on search engines it visits a real results page for
   a randomly generated query, and on AI chatbots it types and submits a random
   query — the *TrackMeNot* technique, which pollutes your search/interest profile.

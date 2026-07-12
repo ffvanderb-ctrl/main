@@ -46,6 +46,11 @@
   let cy = rnd(window.innerHeight * 0.3, window.innerHeight * 0.7);
   let lastEl = null;
 
+  // Videos already watched (so we don't re-watch the same one), and a shared
+  // handle to the current visit's deadline (extendable when watching a video).
+  const watchedVideos = new WeakSet();
+  const endTimeRef = { t: 0 };
+
   function fire(el, type, x, y) {
     if (!el) return;
     el.dispatchEvent(new MouseEvent(type, {
@@ -185,19 +190,67 @@
     doChunk();
   }
 
-  // Find a real, sizeable <video> on the page (a watch player, not a tiny preview).
-  function findVideo() {
-    let best = null, area = 0;
+  // How much of an element is actually inside the viewport (0..1 of its area).
+  function visibleFraction(el) {
+    const r = el.getBoundingClientRect();
+    const area = r.width * r.height;
+    if (area <= 0) return 0;
+    const vw = Math.max(0, Math.min(r.right, window.innerWidth) - Math.max(r.left, 0));
+    const vh = Math.max(0, Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0));
+    return (vw * vh) / area;
+  }
+
+  // Find a sizeable <video> that's actually ON SCREEN right now (majority visible
+  // and its centre within the viewport) — not one loaded further down the page.
+  function findVisibleVideo() {
+    let best = null, bestArea = 0;
     for (const v of document.querySelectorAll("video")) {
       const r = v.getBoundingClientRect();
-      const a = r.width * r.height;
-      if (a > area && a > 40000) { area = a; best = v; }
+      const area = r.width * r.height;
+      if (area < 40000) continue;
+      const centreY = r.top + r.height / 2;
+      if (centreY < 0 || centreY > window.innerHeight) continue;
+      if (visibleFraction(v) < 0.5) continue;
+      if (area > bestArea) { bestArea = area; best = v; }
     }
     return best;
   }
 
   function ensurePlaying(v) {
     try { if (v.paused) { const p = v.play(); if (p && p.catch) p.catch(() => {}); } } catch (e) {}
+  }
+
+  // Watch an on-screen video, then hand control back so browsing/scrolling
+  // resumes. Short social clips are watched roughly one loop (occasionally two)
+  // and then scrolled past; a large dedicated player (a real watch page) is
+  // watched for a longer stretch and extends the site's stay.
+  function watchVisibleVideo(v, done) {
+    watchedVideos.add(v);
+    ensurePlaying(v);
+    const d = v.duration;
+    const isShort = isFinite(d) && d > 0 && d < 90;
+    const bigPlayer = visibleFraction(v) * (v.getBoundingClientRect().width * v.getBoundingClientRect().height)
+      / (window.innerWidth * window.innerHeight) > 0.22;
+
+    let watchMs;
+    if (isShort) {
+      // Watch about one loop; sometimes (30%) linger for a second loop.
+      const loops = chance(0.3) ? 2 : 1;
+      watchMs = Math.min(d * loops, 150) * 1000 + rnd(400, 1500);
+    } else if (bigPlayer) {
+      // A real watch page — settle in and extend the stay like a viewer.
+      chrome.runtime.sendMessage({ type: "watchVideo" }, (r) => {
+        if (chrome.runtime.lastError) return;
+        if (r && r.ok && r.dwellMs) endTimeRef.t = Math.max(endTimeRef.t, Date.now() + r.dwellMs);
+      });
+      watchMs = rnd(30000, 90000);
+    } else {
+      // A longer clip in a feed: watch a bounded chunk, don't get stuck on it.
+      watchMs = rnd(12000, 35000);
+    }
+    // Occasionally nudge the cursor mid-watch and keep it playing.
+    if (chance(0.6)) setTimeout(() => { ensurePlaying(v); if (chance(0.5)) wander(() => {}); }, watchMs * 0.5);
+    setTimeout(() => { if (done) done(); }, watchMs);
   }
 
   // Aimless cursor drift, like a person resting/moving the mouse while reading.
@@ -425,37 +478,23 @@
   chrome.runtime.sendMessage({ type: "contentInit" }, (resp) => {
     if (chrome.runtime.lastError || !resp || !resp.run) return;
 
-    let endTime = Date.now() + resp.dwellMs;
+    endTimeRef.t = Date.now() + resp.dwellMs;
     const base = resp.actionIntervalMs;
     // On chatbot pages, don't click links — just type the query and read the
     // answer — so we don't wander off the chat or start a new conversation.
     const allowClick = resp.click && !resp.chatbot;
-    let videoMode = false;
-
-    // Detect a playing video and switch to "watching": keep it playing, extend
-    // the stay (a real viewer lingers), and mostly sit still with the odd move.
-    function checkVideo() {
-      const v = findVideo();
-      if (!v) return;
-      ensurePlaying(v);
-      if (!videoMode) {
-        videoMode = true;
-        chrome.runtime.sendMessage({ type: "watchVideo" }, (r) => {
-          if (chrome.runtime.lastError) return;
-          if (r && r.ok && r.dwellMs) endTime = Math.max(endTime, Date.now() + r.dwellMs);
-        });
-      }
-    }
 
     // Choose the next thing to do, weighted to look like reading with occasional
     // interaction — not a metronome of identical actions. Returns the action
     // function plus a type tag used to pick a natural follow-up pause.
     function pickAction() {
       const r = Math.random();
-      // Watching a video: mostly still, occasional small cursor move — no
-      // scrolling away from the player, no clicking.
-      if (videoMode) {
-        return r < 0.8 ? { fn: null, type: "watch" } : { fn: wander, type: "wander" };
+      // If a video is actually on screen and not yet watched, watch it — but
+      // only while it's visible, and only for about its length (short feed clips
+      // get scrolled past once they're done, not looped for minutes).
+      const vid = findVisibleVideo();
+      if (vid && !watchedVideos.has(vid)) {
+        return { fn: (done) => watchVisibleVideo(vid, done), type: "video" };
       }
       // Social/feed sites: mostly fast, continuous scrolling with the odd
       // cursor drift or click, rarely a real pause.
@@ -492,7 +531,7 @@
     function pauseAfter(type) {
       let lo, hi;
       switch (type) {
-        case "watch":  lo = 4.0; hi = 10.0; break; // watching — long stretches still
+        case "video":  lo = 0.2; hi = 0.9; break;  // just watched — now scroll on
         case "feed":   lo = 0.15; hi = 0.7; break; // keep flicking the feed
         case "scroll": lo = 0.7; hi = 2.4; break;  // read what scrolled into view
         case "click":  lo = 1.4; hi = 3.6; break;  // absorb the result of a click
@@ -506,7 +545,7 @@
     }
 
     function step() {
-      if (Date.now() >= endTime) {
+      if (Date.now() >= endTimeRef.t) {
         chrome.runtime.sendMessage({ type: "siteDone", index: resp.index });
         return;
       }
@@ -515,11 +554,6 @@
       if (fn) fn(next);
       else next(); // idle read
     }
-
-    // Watch for a video player appearing (many load late in a SPA) and keep it
-    // playing. The interval dies with the page on navigation.
-    checkVideo();
-    setInterval(checkVideo, 5000);
 
     // Settle first, as a person would before doing anything.
     if (resp.chatbot && resp.query) {
