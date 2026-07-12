@@ -13,7 +13,24 @@
   if (window.__siteVisitorActive) return;
   window.__siteVisitorActive = true;
 
-  const AVOID = /(log\s?out|sign\s?out|delete|remove|unsubscribe|deactivate|close account|purchase|checkout|pay now|confirm order)/i;
+  // Elements whose label/href suggests a state-changing or transactional action
+  // are never clicked — this keeps every visit strictly browse-only:
+  //  - accounts:     log out, delete, deactivate, sign up, register
+  //  - social:       comment, reply, post, share, save, like, follow, subscribe
+  //  - shopping:     add to cart/basket, buy, checkout, payment, place order
+  //  - gambling:     bet, wager, stake, deposit, withdraw, spin, play for real
+  const AVOID = new RegExp([
+    "log\\s?out", "sign\\s?out", "delete", "remove", "deactivate", "close account",
+    "sign\\s?up", "register", "create account", "join now",
+    "comment", "reply", "\\bpost\\b", "reblog", "retweet", "repost", "\\bshare\\b",
+    "\\bsave\\b", "bookmark", "\\blike\\b", "favorite", "favourite", "follow",
+    "subscribe", "upvote", "downvote", "\\breact\\b", "add friend", "connect",
+    "add to (cart|basket|bag)", "buy now", "\\bbuy\\b", "checkout", "check out",
+    "payment", "pay now", "place order", "confirm order", "proceed to", "purchase",
+    "add to wishlist", "pre-?order",
+    "bet", "wager", "stake", "deposit", "withdraw", "place bet", "spin", "play now",
+    "unsubscribe", "opt out"
+  ].join("|"), "i");
 
   // ---- small math / random helpers ----------------------------------------
   const rnd = (a, b) => a + Math.random() * (b - a);
@@ -198,12 +215,82 @@
     }, rnd(250, 600));
   }
 
+  // ---- chatbot query typing ------------------------------------------------
+  // Best-effort: find the main chat input, type a random decoy query with
+  // human-like keystrokes, and submit. Chatbots that require a login and no
+  // visible input simply do nothing. Used only on flagged chatbot pages.
+  function setNativeValue(el, value) {
+    const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, "value");
+    if (setter && setter.set) setter.set.call(el, value);
+    else el.value = value;
+  }
+
+  function findChatInput() {
+    const sel = 'textarea, [contenteditable="true"], [role="textbox"], input[type="text"], input[type="search"]';
+    let best = null, bestArea = 0;
+    for (const el of document.querySelectorAll(sel)) {
+      if (!isVisible(el)) continue;
+      if (el.disabled || el.readOnly) continue;
+      const r = el.getBoundingClientRect();
+      const area = r.width * r.height;
+      // Prefer a large input in the lower/central part of the page (chat boxes).
+      const score = area * (r.top > window.innerHeight * 0.4 ? 1.5 : 1);
+      if (score > bestArea) { bestArea = score; best = el; }
+    }
+    return best;
+  }
+
+  function typeQuery(query, done) {
+    let el;
+    try { el = findChatInput(); } catch (e) { el = null; }
+    if (!el) return done && done();
+    const ce = el.isContentEditable;
+    try { el.focus(); el.scrollIntoView({ block: "center" }); } catch (e) {}
+
+    let i = 0;
+    const typeChar = () => {
+      if (i >= query.length) { setTimeout(submit, rnd(400, 1000)); return; }
+      const ch = query[i++];
+      try {
+        el.dispatchEvent(new KeyboardEvent("keydown", { key: ch, bubbles: true }));
+        if (ce) {
+          document.execCommand("insertText", false, ch);
+        } else {
+          setNativeValue(el, (el.value || "") + ch);
+        }
+        el.dispatchEvent(new InputEvent("input", { bubbles: true, data: ch, inputType: "insertText" }));
+        el.dispatchEvent(new KeyboardEvent("keyup", { key: ch, bubbles: true }));
+      } catch (e) {}
+      setTimeout(typeChar, rnd(45, 170)); // human-ish keystroke cadence
+    };
+
+    const submit = () => {
+      try {
+        const opts = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true };
+        el.dispatchEvent(new KeyboardEvent("keydown", opts));
+        el.dispatchEvent(new KeyboardEvent("keyup", opts));
+        // Fall back to a nearby send/ask/search button if Enter didn't submit.
+        const btn = Array.from(document.querySelectorAll('button, [role="button"]'))
+          .find((b) => isVisible(b) &&
+            /send|ask|submit|search|go\b/i.test((b.getAttribute("aria-label") || "") + " " + (b.innerText || "")));
+        if (btn) { fire(btn, "mousedown", 0, 0); fire(btn, "mouseup", 0, 0); fire(btn, "click", 0, 0); }
+      } catch (e) {}
+      if (done) done();
+    };
+
+    setTimeout(typeChar, rnd(400, 1000));
+  }
+
   // ---- main loop -----------------------------------------------------------
   chrome.runtime.sendMessage({ type: "contentInit" }, (resp) => {
     if (chrome.runtime.lastError || !resp || !resp.run) return;
 
     const endTime = Date.now() + resp.dwellMs;
     const base = resp.actionIntervalMs;
+    // On chatbot pages, don't click links — just type the query and read the
+    // answer — so we don't wander off the chat or start a new conversation.
+    const allowClick = resp.click && !resp.chatbot;
 
     // Choose the next thing to do, weighted to look like reading with occasional
     // interaction — not a metronome of identical actions. Returns the action
@@ -215,10 +302,10 @@
       if (resp.social && resp.scroll) {
         if (r < 0.75) return { fn: feedScroll, type: "feed" };
         if (r < 0.86) return { fn: wander, type: "wander" };
-        if (resp.click && r < 0.95) return { fn: humanClick, type: "click" };
+        if (allowClick && r < 0.95) return { fn: humanClick, type: "click" };
         return { fn: null, type: "read" };
       }
-      if (resp.click && resp.scroll) {
+      if (allowClick && resp.scroll) {
         if (r < 0.45) return { fn: humanScroll, type: "scroll" };
         if (r < 0.65) return { fn: wander, type: "wander" };
         if (r < 0.85) return { fn: humanClick, type: "click" };
@@ -228,7 +315,7 @@
         if (r < 0.7) return { fn: humanScroll, type: "scroll" };
         return { fn: r < 0.9 ? wander : null, type: r < 0.9 ? "wander" : "read" };
       }
-      if (resp.click) {
+      if (allowClick) {
         if (r < 0.6) return { fn: humanClick, type: "click" };
         return { fn: r < 0.8 ? wander : null, type: r < 0.8 ? "wander" : "read" };
       }
@@ -266,7 +353,12 @@
       else next(); // idle read
     }
 
-    // Settle first, as a person would before doing anything.
-    setTimeout(step, rnd(900, 2600));
+    // Settle first, as a person would before doing anything. On a chatbot page,
+    // type and submit the decoy query, then read/scroll the response.
+    if (resp.chatbot && resp.query) {
+      setTimeout(() => typeQuery(resp.query, () => setTimeout(step, rnd(1500, 3500))), rnd(1200, 3000));
+    } else {
+      setTimeout(step, rnd(900, 2600));
+    }
   });
 })();

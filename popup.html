@@ -15,11 +15,15 @@
   <main>
     <section class="block">
       <div class="label-row">
-        <label class="field-label" for="sites">Websites (one per line)</label>
-        <button id="loadPopular" class="link-btn" type="button">Load 100+ popular sites</button>
+        <label class="field-label">Site categories</label>
+        <span class="hint" id="count"></span>
       </div>
-      <textarea id="sites" rows="6" placeholder="example.com&#10;https://www.wikipedia.org"></textarea>
-      <div class="hint" id="count"></div>
+      <div id="categories" class="cats"></div>
+    </section>
+
+    <section class="block">
+      <label class="field-label" for="sites">Extra custom sites (one per line)</label>
+      <textarea id="sites" rows="3" placeholder="example.com&#10;mysite.org"></textarea>
     </section>
 
     <section class="block grid">
@@ -35,7 +39,7 @@
 
     <section class="block checks">
       <label><input type="checkbox" id="scroll" /> Scroll the page</label>
-      <label><input type="checkbox" id="click" /> Click elements</label>
+      <label><input type="checkbox" id="click" /> Click elements (browse-only)</label>
       <label><input type="checkbox" id="loop" /> Loop forever</label>
       <label><input type="checkbox" id="shuffle" /> Randomize visit order</label>
     </section>
