@@ -13,10 +13,22 @@ build an accurate profile of what you actually do.
 
 ## Features
 
-- **300+ built-in sites, grouped into categories** — Search engines, AI chatbots,
-  Social media, Shops & marketplaces, News/reference/general, plus Adult content
-  and Gambling (both **off by default**). Toggle a category on/off in the popup;
-  turning one **off removes its sites from the active list** immediately.
+- **600+ built-in sites across 26 toggleable categories** — Topics: search
+  engines, AI chatbots, social media, shops & marketplaces, news/reference,
+  streaming & video, gaming, developer & tech, government & public, finance &
+  crypto, health & fitness, travel & food, plus Adult and Gambling (both **off by
+  default**). Languages/regions (all opt-in): German, French, Spanish, Italian,
+  Dutch, Portuguese, Russian, Japanese, Chinese, Korean, Arabic, and Indian sites.
+  Toggling a category **off removes its sites from the active list** immediately.
+- **Language/region toggles** — flip on "German websites", "French websites", etc.
+  to fold sets of that country's popular sites into the decoy traffic.
+- **Automatic timing (with manual override)** — by default all timing (per-site
+  dwell, gaps between actions, scrolling) is chosen automatically to mimic human
+  behavior. Turn **Automatic timing** off and the manual "seconds per site" and
+  "action every (sec)" fields appear for you to set yourself.
+- **Video "watching"** — when a page has a real video playing (YouTube, Vimeo,
+  Twitch, streaming sites, or any embedded player), it keeps the video playing,
+  stays much longer (an extra ~0.5–3 min), and mostly sits still like a viewer.
 - **Random decoy searches** — on search engines it visits a real results page for
   a randomly generated query, and on AI chatbots it types and submits a random
   query — the *TrackMeNot* technique, which pollutes your search/interest profile.
@@ -57,11 +69,11 @@ build an accurate profile of what you actually do.
 ## Usage
 
 1. Click the toolbar icon.
-2. Under **Site categories**, tick the categories you want (Search engines and AI
-   chatbots enabled = random decoy searches). Adult/Gambling are off unless you
-   opt in. Optionally add extra URLs in the custom box. The counter shows how many
-   sites are active.
-3. Set **Seconds per site** and **Action every (sec)**.
+2. Under **Site categories**, tick the topics and languages you want. Adult/
+   Gambling and all languages are off unless you opt in. Optionally add extra URLs
+   in the custom box. The counter shows how many sites are active.
+3. Leave **Automatic timing** on to let it pace itself naturally, or turn it off to
+   set **Seconds per site** and **Action every (sec)** yourself.
 4. Check the behaviors you want (Scroll / Click / Loop / Randomize visit order).
    For continuous privacy noise, enable **Loop forever** and **Randomize visit order**.
 5. Click **Save**, then **Start**. A tab opens and begins visiting each site.
@@ -77,9 +89,13 @@ build an accurate profile of what you actually do.
   `wheel`, `scroll`, `click`) that real interaction produces — which is what
   behavior-based trackers actually record. It reports back when its time is up.
   It also enforces the browse-only guardrails and types decoy queries into chatbots.
-- `sites.js` holds the 300+ site catalog (grouped by category), the search/chatbot
-  query-URL templates, and the random query generator. Shared by the popup and the
-  service worker.
+- `sites.js` holds the 600+ site catalog (grouped into 26 topic/language
+  categories), the search/chatbot query-URL templates, and the random query
+  generator. Shared by the popup and the service worker.
+- Video "watching" is driven by the page: when the content script sees a playing
+  `<video>`, it asks the worker to extend that site's deadline (`watchVideo`).
+- Timing is automatic by default (`autoTiming`); turning it off uses your manual
+  seconds-per-site / action-interval values as the baseline.
 - The active visit list = enabled categories + your custom sites, de-duplicated.
 - Settings and run state are stored with `chrome.storage.local`.
 

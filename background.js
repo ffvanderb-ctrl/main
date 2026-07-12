@@ -19,13 +19,26 @@ function defaultCategories() {
 const DEFAULT_CONFIG = {
   categories: defaultCategories(),
   customSites: [],           // user-added URLs, on top of the enabled categories
-  dwellSeconds: 30,          // baseline time to spend on each site (randomized)
-  actionIntervalSeconds: 3,  // seconds between on-page actions
+  autoTiming: true,          // pick natural timing automatically (hides manual fields)
+  dwellSeconds: 30,          // manual baseline time per site (used when autoTiming off)
+  actionIntervalSeconds: 3,  // manual seconds between actions (used when autoTiming off)
   loop: false,               // restart from the top after the last site
   scroll: true,              // allow scrolling
   click: true,               // allow clicking elements
   shuffle: false             // randomize the order sites are visited
 };
+
+// Baselines used when Automatic timing is on — the randomization layers on top.
+const AUTO_DWELL_SECONDS = 45;
+const AUTO_INTERVAL_SECONDS = 3;
+
+function baseDwellSeconds(config) {
+  return config.autoTiming ? AUTO_DWELL_SECONDS : Math.max(3, config.dwellSeconds || 30);
+}
+function baseIntervalMs(config) {
+  const s = config.autoTiming ? AUTO_INTERVAL_SECONDS : Math.max(1, config.actionIntervalSeconds || 3);
+  return Math.max(500, s * 1000);
+}
 
 const DEFAULT_RUNTIME = {
   running: false,
@@ -111,7 +124,7 @@ function nextDeadline(config, entry) {
     factor = 1.5 + Math.random() * 1.3;     // long read: 150%–280%
   }
   if (isSocialEntry(entry)) factor *= 1.8 + Math.random() * 1.7; // 1.8x–3.5x longer
-  const ms = config.dwellSeconds * 1000 * factor;
+  const ms = baseDwellSeconds(config) * 1000 * factor;
   return Date.now() + Math.max(4000, ms);
 }
 
@@ -276,7 +289,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           run: true,
           index: rt.currentIndex,
           dwellMs: remaining,
-          actionIntervalMs: Math.max(500, config.actionIntervalSeconds * 1000),
+          actionIntervalMs: baseIntervalMs(config),
           scroll: config.scroll,
           click: config.click,
           category: entry.category || "custom",
@@ -286,6 +299,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           chatbot: !!entry.chat,
           query: entry.chat ? randomQuery() : null
         });
+        break;
+      }
+      case "watchVideo": {
+        // The page found a playing video — extend this site's deadline so it
+        // "watches" for a while, like a real viewer. Applied once per page.
+        const rt = await getRuntime();
+        if (!rt.running || !sender.tab || sender.tab.id !== rt.tabId) {
+          sendResponse({ ok: false });
+          break;
+        }
+        const now = Date.now();
+        const watchMs = 30000 + Math.random() * 150000; // watch 0.5–3 min
+        const newDeadline = Math.max(rt.siteDeadline, now + watchMs);
+        await setRuntime({ siteDeadline: newDeadline });
+        await scheduleSafetyAlarm(newDeadline);
+        sendResponse({ ok: true, dwellMs: newDeadline - now });
         break;
       }
       case "siteDone": {

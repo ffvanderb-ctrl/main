@@ -6,11 +6,22 @@ const send = (msg) => chrome.runtime.sendMessage(msg);
 // Categories whose default is OFF get a small caution note.
 const SENSITIVE = { adult: true, gambling: true };
 
-// Render the category toggles from the shared catalog.
+const GROUP_LABELS = { topic: "Topics", language: "Languages / regions" };
+
+// Render the category toggles from the shared catalog, grouped by topic/language.
 function renderCategories(categories) {
   const wrap = el("categories");
   wrap.innerHTML = "";
+  let lastGroup = null;
   for (const meta of CATEGORY_META) {
+    const group = meta.group || "topic";
+    if (group !== lastGroup) {
+      const h = document.createElement("div");
+      h.className = "cat-group-head";
+      h.textContent = GROUP_LABELS[group] || group;
+      wrap.appendChild(h);
+      lastGroup = group;
+    }
     const on = categories[meta.key] !== undefined ? categories[meta.key] : meta.default;
     const n = (SITE_CATEGORIES[meta.key] || []).length;
     const row = document.createElement("label");
@@ -44,6 +55,13 @@ function renderCategories(categories) {
   }
 }
 
+// Show manual timing fields only when Automatic timing is off.
+function updateAutoVisibility() {
+  const auto = el("auto").checked;
+  el("timing").classList.toggle("hidden", auto);
+  el("autoHint").classList.toggle("hidden", !auto);
+}
+
 function readCategories() {
   const out = {};
   el("categories").querySelectorAll("input[data-key]").forEach((cb) => {
@@ -56,6 +74,7 @@ function readForm() {
   return {
     categories: readCategories(),
     customSites: el("sites").value.split("\n").map((s) => s.trim()).filter(Boolean),
+    autoTiming: el("auto").checked,
     dwellSeconds: Math.max(3, parseInt(el("dwell").value, 10) || 30),
     actionIntervalSeconds: Math.max(1, parseInt(el("interval").value, 10) || 3),
     scroll: el("scroll").checked,
@@ -68,12 +87,14 @@ function readForm() {
 function fillForm(config) {
   renderCategories(config.categories || {});
   el("sites").value = (config.customSites || []).join("\n");
+  el("auto").checked = config.autoTiming !== false;
   el("dwell").value = config.dwellSeconds;
   el("interval").value = config.actionIntervalSeconds;
   el("scroll").checked = config.scroll;
   el("click").checked = config.click;
   el("loop").checked = config.loop;
   el("shuffle").checked = config.shuffle;
+  updateAutoVisibility();
   updateCount();
 }
 
@@ -125,6 +146,7 @@ async function init() {
 }
 
 el("sites").addEventListener("input", updateCount);
+el("auto").addEventListener("change", updateAutoVisibility);
 
 el("save").addEventListener("click", async () => {
   await send({ type: "saveConfig", config: readForm() });

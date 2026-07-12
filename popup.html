@@ -26,14 +26,21 @@
       <textarea id="sites" rows="3" placeholder="example.com&#10;mysite.org"></textarea>
     </section>
 
-    <section class="block grid">
-      <div>
-        <label class="field-label" for="dwell">Seconds per site</label>
-        <input type="number" id="dwell" min="3" max="3600" />
-      </div>
-      <div>
-        <label class="field-label" for="interval">Action every (sec)</label>
-        <input type="number" id="interval" min="1" max="60" />
+    <section class="block">
+      <label class="cat auto-row">
+        <span><input type="checkbox" id="auto" /> <span class="cat-label">Automatic timing</span></span>
+        <span class="hint">natural &amp; random</span>
+      </label>
+      <p class="hint" id="autoHint">Timing is chosen automatically to mimic human behavior. Turn off to set it yourself.</p>
+      <div id="timing" class="grid" style="margin-top:10px;">
+        <div>
+          <label class="field-label" for="dwell">Seconds per site</label>
+          <input type="number" id="dwell" min="3" max="3600" />
+        </div>
+        <div>
+          <label class="field-label" for="interval">Action every (sec)</label>
+          <input type="number" id="interval" min="1" max="60" />
+        </div>
       </div>
     </section>
 

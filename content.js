@@ -184,6 +184,21 @@
     doChunk();
   }
 
+  // Find a real, sizeable <video> on the page (a watch player, not a tiny preview).
+  function findVideo() {
+    let best = null, area = 0;
+    for (const v of document.querySelectorAll("video")) {
+      const r = v.getBoundingClientRect();
+      const a = r.width * r.height;
+      if (a > area && a > 40000) { area = a; best = v; }
+    }
+    return best;
+  }
+
+  function ensurePlaying(v) {
+    try { if (v.paused) { const p = v.play(); if (p && p.catch) p.catch(() => {}); } } catch (e) {}
+  }
+
   // Aimless cursor drift, like a person resting/moving the mouse while reading.
   function wander(done) {
     const tx = clamp(cx + rnd(-250, 250), 5, window.innerWidth - 5);
@@ -286,17 +301,38 @@
   chrome.runtime.sendMessage({ type: "contentInit" }, (resp) => {
     if (chrome.runtime.lastError || !resp || !resp.run) return;
 
-    const endTime = Date.now() + resp.dwellMs;
+    let endTime = Date.now() + resp.dwellMs;
     const base = resp.actionIntervalMs;
     // On chatbot pages, don't click links — just type the query and read the
     // answer — so we don't wander off the chat or start a new conversation.
     const allowClick = resp.click && !resp.chatbot;
+    let videoMode = false;
+
+    // Detect a playing video and switch to "watching": keep it playing, extend
+    // the stay (a real viewer lingers), and mostly sit still with the odd move.
+    function checkVideo() {
+      const v = findVideo();
+      if (!v) return;
+      ensurePlaying(v);
+      if (!videoMode) {
+        videoMode = true;
+        chrome.runtime.sendMessage({ type: "watchVideo" }, (r) => {
+          if (chrome.runtime.lastError) return;
+          if (r && r.ok && r.dwellMs) endTime = Math.max(endTime, Date.now() + r.dwellMs);
+        });
+      }
+    }
 
     // Choose the next thing to do, weighted to look like reading with occasional
     // interaction — not a metronome of identical actions. Returns the action
     // function plus a type tag used to pick a natural follow-up pause.
     function pickAction() {
       const r = Math.random();
+      // Watching a video: mostly still, occasional small cursor move — no
+      // scrolling away from the player, no clicking.
+      if (videoMode) {
+        return r < 0.8 ? { fn: null, type: "watch" } : { fn: wander, type: "wander" };
+      }
       // Social/feed sites: mostly fast, continuous scrolling with the odd
       // cursor drift or click, rarely a real pause.
       if (resp.social && resp.scroll) {
@@ -330,6 +366,7 @@
     function pauseAfter(type) {
       let lo, hi;
       switch (type) {
+        case "watch":  lo = 4.0; hi = 10.0; break; // watching — long stretches still
         case "feed":   lo = 0.15; hi = 0.7; break; // keep flicking the feed
         case "scroll": lo = 0.7; hi = 2.4; break;  // read what scrolled into view
         case "click":  lo = 1.4; hi = 3.6; break;  // absorb the result of a click
@@ -352,6 +389,11 @@
       if (fn) fn(next);
       else next(); // idle read
     }
+
+    // Watch for a video player appearing (many load late in a SPA) and keep it
+    // playing. The interval dies with the page on navigation.
+    checkVideo();
+    setInterval(checkVideo, 5000);
 
     // Settle first, as a person would before doing anything. On a chatbot page,
     // type and submit the decoy query, then read/scroll the response.

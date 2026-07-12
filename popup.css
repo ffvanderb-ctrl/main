@@ -70,7 +70,26 @@ textarea:focus, input:focus { outline: none; border-color: var(--accent); }
 .label-row { display: flex; align-items: baseline; justify-content: space-between; }
 .hint { font-size: 11px; color: var(--muted); }
 
-.cats { display: flex; flex-direction: column; gap: 7px; }
+.cats {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 210px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.cat-group-head {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+  margin: 8px 0 2px;
+  font-weight: 700;
+}
+.cat-group-head:first-child { margin-top: 0; }
+.auto-row { margin-bottom: 2px; }
+#timing.hidden { display: none; }
+#autoHint.hidden { display: none; }
 .cat {
   display: flex;
   align-items: center;
